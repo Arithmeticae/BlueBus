@@ -444,6 +444,11 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
                     context->bt->artist,
                     context->bt->album
                 );
+
+                // Set the index in the array of each metadata field for use in some display modes
+                context->mainDisplay.titleIndex = 0; // This will generally always be 0, but set it anyway for consistency
+                context->mainDisplay.artistIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 3; // Account for " - "
+                context->mainDisplay.albumIndex = context->mainDisplay.artistIndex + strlen(context->bt->artist) + 4; // Account for " on "
             } else if (strlen(context->bt->artist) > 0) {
                 snprintf(
                     text,
@@ -452,6 +457,10 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
                     context->bt->title,
                     context->bt->artist
                 );
+
+                context->mainDisplay.titleIndex = 0;
+                context->mainDisplay.artistIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 3;
+                context->mainDisplay.albumIndex = 0;
             } else if (strlen(context->bt->album) > 0) {
                 snprintf(
                     text,
@@ -460,6 +469,10 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
                     context->bt->title,
                     context->bt->album
                 );
+
+                context->mainDisplay.titleIndex = 0;
+                context->mainDisplay.artistIndex = 0;
+                context->mainDisplay.albumIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 4;
             } else {
                 snprintf(text, UTILS_DISPLAY_TEXT_SIZE, "%s", context->bt->title);
             }

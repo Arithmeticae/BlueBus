@@ -190,6 +190,9 @@ typedef struct UtilsAbstractDisplayValue_t {
     uint8_t length;
     uint8_t status;
     int8_t timeout;
+    uint8_t titleIndex;
+    uint8_t artistIndex;
+    uint8_t albumIndex;
 } UtilsAbstractDisplayValue_t;
 void UtilsCheckRCON();
 uint8_t UtilsConvertCmToIn(uint8_t);
