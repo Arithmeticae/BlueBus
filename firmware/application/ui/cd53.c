@@ -430,60 +430,60 @@ void CD53BTDeviceReady(void *ctx, unsigned char *tmp)
 void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
 {
     if (
-        context->displayMetadata == CD53_DISPLAY_METADATA_ON &&
-        context->mode == CD53_MODE_ACTIVE
+        context->displayMetadata != CD53_DISPLAY_METADATA_ON ||
+        context->mode != CD53_MODE_ACTIVE ||
+        strlen(context->bt->title) == 0
     ) {
-        if (strlen(context->bt->title) > 0) {
-            char text[UTILS_DISPLAY_TEXT_SIZE] = {0};
-            if (strlen(context->bt->artist) > 0 && strlen(context->bt->album) > 0) {
-                snprintf(
-                    text,
-                    UTILS_DISPLAY_TEXT_SIZE,
-                    "%s - %s on %s",
-                    context->bt->title,
-                    context->bt->artist,
-                    context->bt->album
-                );
+        // Prevent overwriting the display with non-useful data.
+        return;
+    }
 
-                // Set the index in the array of each metadata field for use in some display modes
-                context->mainDisplay.titleIndex = 0; // This will generally always be 0, but set it anyway for consistency
-                context->mainDisplay.artistIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 3; // Account for " - "
-                context->mainDisplay.albumIndex = context->mainDisplay.artistIndex + strlen(context->bt->artist) + 4; // Account for " on "
-            } else if (strlen(context->bt->artist) > 0) {
-                snprintf(
-                    text,
-                    UTILS_DISPLAY_TEXT_SIZE,
-                    "%s - %s",
-                    context->bt->title,
-                    context->bt->artist
-                );
+    char text[UTILS_DISPLAY_TEXT_SIZE] = {0};
+    if (strlen(context->bt->artist) > 0 && strlen(context->bt->album) > 0) {
+        snprintf(
+            text,
+            UTILS_DISPLAY_TEXT_SIZE,
+            "%s - %s on %s",
+            context->bt->title,
+            context->bt->artist,
+            context->bt->album
+        );
 
-                context->mainDisplay.titleIndex = 0;
-                context->mainDisplay.artistIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 3;
-                context->mainDisplay.albumIndex = 0;
-            } else if (strlen(context->bt->album) > 0) {
-                snprintf(
-                    text,
-                    UTILS_DISPLAY_TEXT_SIZE,
-                    "%s on %s",
-                    context->bt->title,
-                    context->bt->album
-                );
+        // Set the index in the array of each metadata field for use in some display modes
+        context->mainDisplay.titleIndex = 0; // This will generally always be 0, but set it anyway for consistency
+        context->mainDisplay.artistIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 3; // Account for " - "
+        context->mainDisplay.albumIndex = context->mainDisplay.artistIndex + strlen(context->bt->artist) + 4; // Account for " on "
+    } else if (strlen(context->bt->artist) > 0) {
+        snprintf(
+            text,
+            UTILS_DISPLAY_TEXT_SIZE,
+            "%s - %s",
+            context->bt->title,
+            context->bt->artist
+        );
 
-                context->mainDisplay.titleIndex = 0;
-                context->mainDisplay.artistIndex = 0;
-                context->mainDisplay.albumIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 4;
-            } else {
-                snprintf(text, UTILS_DISPLAY_TEXT_SIZE, "%s", context->bt->title);
-            }
-            context->mainDisplay.timeout = 0;
-            CD53SetMainDisplayText(context, text, 3000 / CD53_DISPLAY_SCROLL_SPEED);
-            if (context->mediaChangeState == CD53_MEDIA_STATE_CHANGE) {
-                context->mediaChangeState = CD53_MEDIA_STATE_METADATA_OK;
-            }
-        } else {
-            CD53SetMainDisplayText(context, "Bluetooth", 0);
-        }
+        context->mainDisplay.titleIndex = 0;
+        context->mainDisplay.artistIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 3;
+        context->mainDisplay.albumIndex = 0;
+    } else if (strlen(context->bt->album) > 0) {
+        snprintf(
+            text,
+            UTILS_DISPLAY_TEXT_SIZE,
+            "%s on %s",
+            context->bt->title,
+            context->bt->album
+        );
+
+        context->mainDisplay.titleIndex = 0;
+        context->mainDisplay.artistIndex = 0;
+        context->mainDisplay.albumIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 4;
+    } else {
+        snprintf(text, UTILS_DISPLAY_TEXT_SIZE, "%s", context->bt->title);
+    }
+    context->mainDisplay.timeout = 0;
+    CD53SetMainDisplayText(context, text, 3000 / CD53_DISPLAY_SCROLL_SPEED);
+    if (context->mediaChangeState == CD53_MEDIA_STATE_CHANGE) {
+        context->mediaChangeState = CD53_MEDIA_STATE_METADATA_OK;
     }
 }
 
@@ -501,7 +501,10 @@ void CD53BTPlaybackStatus(void *ctx, unsigned char *status)
                 CD53SetMainDisplayText(context, "Paused", 0);
             }
         } else {
-            if (context->mediaChangeState == CD53_MEDIA_STATE_OK) {
+            if (context->mediaChangeState == CD53_MEDIA_STATE_OK ||
+                (context->mediaChangeState == CD53_MEDIA_STATE_CHANGE &&
+                 strlen(context->bt->title) > 0)
+            ) {
                 CD53BTMetadata(context, 0x00);
             }
             context->mediaChangeState = CD53_MEDIA_STATE_OK;
@@ -569,6 +572,8 @@ void CD53IBusCDChangerStatus(void *ctx, unsigned char *pkt)
         if (context->mode == CD53_MODE_OFF) {
             context->mode = CD53_MODE_ACTIVE;
             CD53SetMainDisplayText(context, "Bluetooth", 0);
+            CD53BTMetadata(context, 0x00);
+            BTCommandGetMetadata(context->bt);
             if (ConfigGetSetting(CONFIG_SETTING_AUTOPLAY) == CONFIG_SETTING_ON) {
                 BTCommandPlay(context->bt);
             } else if (btPlaybackStatus == BT_AVRCP_STATUS_PLAYING) {
