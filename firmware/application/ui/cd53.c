@@ -439,6 +439,7 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
     }
 
     char text[UTILS_DISPLAY_TEXT_SIZE] = {0};
+
     if (strlen(context->bt->artist) > 0 && strlen(context->bt->album) > 0) {
         snprintf(
             text,
@@ -448,11 +449,6 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
             context->bt->artist,
             context->bt->album
         );
-
-        // Set the index in the array of each metadata field for use in some display modes
-        context->mainDisplay.titleIndex = 0; // This will generally always be 0, but set it anyway for consistency
-        context->mainDisplay.artistIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 3; // Account for " - "
-        context->mainDisplay.albumIndex = context->mainDisplay.artistIndex + strlen(context->bt->artist) + 4; // Account for " on "
     } else if (strlen(context->bt->artist) > 0) {
         snprintf(
             text,
@@ -461,10 +457,6 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
             context->bt->title,
             context->bt->artist
         );
-
-        context->mainDisplay.titleIndex = 0;
-        context->mainDisplay.artistIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 3;
-        context->mainDisplay.albumIndex = 0;
     } else if (strlen(context->bt->album) > 0) {
         snprintf(
             text,
@@ -473,15 +465,13 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
             context->bt->title,
             context->bt->album
         );
-
-        context->mainDisplay.titleIndex = 0;
-        context->mainDisplay.artistIndex = 0;
-        context->mainDisplay.albumIndex = context->mainDisplay.titleIndex + strlen(context->bt->title) + 4;
     } else {
         snprintf(text, UTILS_DISPLAY_TEXT_SIZE, "%s", context->bt->title);
     }
+
     context->mainDisplay.timeout = 0;
     CD53SetMainDisplayText(context, text, 3000 / CD53_DISPLAY_SCROLL_SPEED);
+
     if (context->mediaChangeState == CD53_MEDIA_STATE_CHANGE) {
         context->mediaChangeState = CD53_MEDIA_STATE_METADATA_OK;
     }
@@ -719,20 +709,24 @@ void CD53TimerDisplay(void *ctx)
                 if (context->scrollTick < 3 && context->mainDisplay.index != 0) {
                     return;
                 }
+
                 context->scrollTick = 0;
                 char text[CD53_DISPLAY_TEXT_LEN + 1] = {0};
                 uint8_t textLength = CD53_DISPLAY_TEXT_LEN;
                 uint8_t idxEnd = context->mainDisplay.index + textLength;
+
                 // Prevent strncpy() from going out of bounds
                 if (idxEnd >= context->mainDisplay.length) {
                     textLength = context->mainDisplay.length - context->mainDisplay.index;
                     idxEnd = context->mainDisplay.index + textLength;
                 }
+
                 UtilsStrncpy(
                     text,
                     &context->mainDisplay.text[context->mainDisplay.index],
                     textLength + 1
                 );
+
                 // If we start with a space, it will be ignored by the display
                 // Instead, use 0x9D which results in a true blank being displayed
                 if (text[0] == 0x20) {
@@ -745,7 +739,9 @@ void CD53TimerDisplay(void *ctx)
                 } else if (context->radioType == CONFIG_UI_IRIS) {
                     IBusCommandIRISDisplayWrite(context->ibus, text);
                 }
+
                 uint8_t metaMode = ConfigGetSetting(CONFIG_SETTING_METADATA_MODE);
+
                 // Pause at the beginning of the text
                 if (context->mainDisplay.index == 0) {
                     if (metaMode == MENU_SINGLELINE_SETTING_METADATA_MODE_STATIC ||
@@ -756,6 +752,7 @@ void CD53TimerDisplay(void *ctx)
                         context->mainDisplay.timeout = 20;
                     }
                 }
+
                 if (idxEnd >= context->mainDisplay.length) {
                     // Pause at the end of the text or on the next iteration
                     // if we have Party Single Scroll mode enabled

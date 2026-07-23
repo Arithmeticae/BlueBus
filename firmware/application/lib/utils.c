@@ -109,9 +109,6 @@ UtilsAbstractDisplayValue_t UtilsDisplayValueInit(char *text, uint8_t status)
     UtilsStrncpy(value.text, text, UTILS_DISPLAY_TEXT_SIZE);
     value.index = 0;
     value.timeout = 0;
-    value.titleIndex = 0;
-    value.artistIndex = 0;
-    value.albumIndex = 0;
     value.status = status;
     value.length = strlen(text);
     return value;

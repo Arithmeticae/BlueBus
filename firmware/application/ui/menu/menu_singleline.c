@@ -275,28 +275,61 @@ void MenuSingleLineSettings(MenuSingleLineContext_t *context)
     uint8_t value = ConfigGetSetting(
         CONFIG_SETTING_METADATA_MODE
     );
-    if (value == MENU_SINGLELINE_SETTING_METADATA_MODE_OFF) {
-        MenuSingleLineSetDisplayText(
-            context,
-            "Metadata: Off",
-            0,
-            MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-        );
-    } else if (value == MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY) {
-        MenuSingleLineSetDisplayText(
-            context,
-            "Metadata: Party",
-            0,
-            MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-        );
-    } else if (value == MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNK) {
-        MenuSingleLineSetDisplayText(
-            context,
-            "Metadata: Chunk",
-            0,
-            MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-        );
+
+    switch (value) {
+        case MENU_SINGLELINE_SETTING_METADATA_MODE_OFF:
+            MenuSingleLineSetDisplayText(
+                context,
+                "Metadata: Off",
+                0,
+                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
+            );
+            break;
+        case MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY:
+            MenuSingleLineSetDisplayText(
+                context,
+                "Metadata: Party",
+                0,
+                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
+            );
+            break;
+        case MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNK:
+            MenuSingleLineSetDisplayText(
+                context,
+                "Metadata: Chunk",
+                0,
+                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
+            );
+            break;
+        case MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY_SINGLE:
+            MenuSingleLineSetDisplayText(
+                context,
+                "Metadata: Party-Single",
+                0,
+                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
+            );
+            break;
+        case MENU_SINGLELINE_SETTING_METADATA_MODE_STATIC:
+            MenuSingleLineSetDisplayText(
+                context,
+                "Metadata: Static",
+                0,
+                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
+            );
+            break;
+        case MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNKY_PARTY:
+            MenuSingleLineSetDisplayText(
+                context,
+                "Metadata: Chunky-Party",
+                0,
+                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
+            );
+            break;
+        default:
+            // No default case.
+            break;
     }
+
     context->settingIdx = MENU_SINGLELINE_SETTING_IDX_METADATA_MODE;
     context->settingValue = value;
     context->settingMode = MENU_SINGLELINE_SETTING_MODE_SCROLL_SETTINGS;
@@ -515,34 +548,11 @@ void MenuSingleLineSettingsScroll(MenuSingleLineContext_t *context, uint8_t dire
 void MenuSingleLineSettingsNextSetting(MenuSingleLineContext_t *context, uint8_t nextMenu)
 {
     context->settingIdx = nextMenu;
+
     if (nextMenu == MENU_SINGLELINE_SETTING_IDX_METADATA_MODE) {
-        uint8_t value = ConfigGetSetting(
-            CONFIG_SETTING_METADATA_MODE
-        );
-        if (value == MENU_SINGLELINE_SETTING_METADATA_MODE_OFF) {
-            MenuSingleLineSetDisplayText(
-                context,
-                "Metadata: Off",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
-        } else if (value == MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY) {
-            MenuSingleLineSetDisplayText(
-                context,
-                "Metadata: Party",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
-        } else if (value == MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNK) {
-            MenuSingleLineSetDisplayText(
-                context,
-                "Metadata: Chunk",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
-        }
-        context->settingValue = value;
+        MenuSingleLineSettings(context);
     }
+
     if (nextMenu == MENU_SINGLELINE_SETTING_IDX_AUTOPLAY) {
         if (ConfigGetSetting(CONFIG_SETTING_AUTOPLAY) == 0x00) {
             MenuSingleLineSetDisplayText(
@@ -563,6 +573,7 @@ void MenuSingleLineSettingsNextSetting(MenuSingleLineContext_t *context, uint8_t
         }
         context->settingIdx = MENU_SINGLELINE_SETTING_IDX_AUTOPLAY;
     }
+
     if (nextMenu == MENU_SINGLELINE_SETTING_IDX_AUDIO_DSP) {
         if (context->ibus->moduleStatus.DSP == 0) {
             MenuSingleLineSetDisplayText(
@@ -922,51 +933,11 @@ void MenuSingleLineSettingsNextValue(MenuSingleLineContext_t *context, uint8_t d
 {
     // Select different configuration options
     if (context->settingIdx == MENU_SINGLELINE_SETTING_IDX_METADATA_MODE) {
-        if (context->settingValue == MENU_SINGLELINE_SETTING_METADATA_MODE_OFF) {
-            MenuSingleLineSetDisplayText(
-                context,
-                "Party",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
-            context->settingValue = MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY;
-        } else if (context->settingValue == MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY) {
-            MenuSingleLineSetDisplayText(
-                context,
-                "Chunk",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
-            context->settingValue = MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNK;
-        } else if (context->settingValue == MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNK) {
-            MenuSingleLineSetDisplayText(
-                context,
-                "Off",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
-            context->settingValue = MENU_SINGLELINE_SETTING_METADATA_MODE_OFF;
-        }
+        // Advance to the next setting, can't use mod rollover as 0 is valid option.
+        context->settingValue = (context->settingValue == MENU_SINGLELINE_SETTING_METADATA_MODE_LAST_OPTION) ? 0 : (context->settingValue + 1);
+        MenuSingleLineSettings(context);
     }
-    if (context->settingIdx == MENU_SINGLELINE_SETTING_IDX_AUTOPLAY) {
-        if (context->settingValue == CONFIG_SETTING_OFF) {
-            MenuSingleLineSetDisplayText(
-                context,
-                "On",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
-            context->settingValue = CONFIG_SETTING_ON;
-        } else {
-            MenuSingleLineSetDisplayText(
-                context,
-                "Off",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
-            context->settingValue = CONFIG_SETTING_OFF;
-        }
-    }
+
     if (context->settingIdx == MENU_SINGLELINE_SETTING_IDX_AUDIO_DSP &&
         context->ibus->moduleStatus.DSP == 1
     ) {
@@ -996,7 +967,8 @@ void MenuSingleLineSettingsNextValue(MenuSingleLineContext_t *context, uint8_t d
             context->settingValue = CONFIG_SETTING_OFF;
         }
     }
-    if (context->settingIdx == MENU_SINGLELINE_SETTING_IDX_LOWER_VOL_REV ||
+    if (context->settingIdx == MENU_SINGLELINE_SETTING_IDX_AUTOPLAY ||
+        context->settingIdx == MENU_SINGLELINE_SETTING_IDX_LOWER_VOL_REV ||
         context->settingIdx == MENU_SINGLELINE_SETTING_IDX_TEL_HFP ||
         context->settingIdx == MENU_SINGLELINE_SETTING_IDX_PARK_LIGHTS
     ) {
