@@ -429,10 +429,15 @@ void CD53BTDeviceReady(void *ctx, unsigned char *tmp)
 
 void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
 {
+    // Set field lengths for use in some metadata display modes.
+    context->bt->titleLength = strlen(context->bt->title);
+    context->bt->artistLength = strlen(context->bt->artist);
+    context->bt->albumLength = strlen(context->bt->album);
+
     if (
         context->displayMetadata != CD53_DISPLAY_METADATA_ON ||
         context->mode != CD53_MODE_ACTIVE ||
-        strlen(context->bt->title) == 0
+        context->bt->titleLength == 0
     ) {
         // Prevent overwriting the display with non-useful data.
         return;
@@ -440,7 +445,7 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
 
     char text[UTILS_DISPLAY_TEXT_SIZE] = {0};
 
-    if (strlen(context->bt->artist) > 0 && strlen(context->bt->album) > 0) {
+    if ((context->bt->artistLength > 0) && (context->bt->albumLength > 0)) {
         snprintf(
             text,
             UTILS_DISPLAY_TEXT_SIZE,
@@ -449,7 +454,7 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
             context->bt->artist,
             context->bt->album
         );
-    } else if (strlen(context->bt->artist) > 0) {
+    } else if (context->bt->artistLength > 0) {
         snprintf(
             text,
             UTILS_DISPLAY_TEXT_SIZE,
@@ -457,7 +462,7 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
             context->bt->title,
             context->bt->artist
         );
-    } else if (strlen(context->bt->album) > 0) {
+    } else if (context->bt->albumLength > 0) {
         snprintf(
             text,
             UTILS_DISPLAY_TEXT_SIZE,
@@ -662,9 +667,11 @@ void CD53TimerDisplay(void *ctx)
     ) {
         return;
     }
+
     if (context->scrollTick < 3) {
         context->scrollTick++;
     }
+
     // Display the temp text, if there is any
     if (context->tempDisplay.status > CD53_DISPLAY_STATUS_OFF) {
         if (context->tempDisplay.timeout == 0) {
@@ -732,6 +739,7 @@ void CD53TimerDisplay(void *ctx)
                 if (text[0] == 0x20) {
                     text[0] = IBUS_RAD_SPACE_CHAR_ALT;
                 }
+
                 if (context->radioType == CONFIG_UI_CD53) {
                     IBusCommandTELIKEDisplayWrite(context->ibus, text);
                 } else if (context->radioType == CONFIG_UI_MIR) {

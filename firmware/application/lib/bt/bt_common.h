@@ -319,6 +319,9 @@ typedef struct BT_t {
     uint32_t lastConnection;
     uint32_t metadataTimestamp;
     uint32_t rxQueueAge;
+    uint8_t titleLength;
+    uint8_t artistLength;
+    uint8_t albumLength;
     char title[BT_METADATA_FIELD_SIZE];
     char artist[BT_METADATA_FIELD_SIZE];
     char album[BT_METADATA_FIELD_SIZE];
