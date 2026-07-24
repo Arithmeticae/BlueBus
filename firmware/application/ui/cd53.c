@@ -749,41 +749,133 @@ void CD53TimerDisplay(void *ctx)
                 }
 
                 uint8_t metaMode = ConfigGetSetting(CONFIG_SETTING_METADATA_MODE);
+                uint8_t atStart = (context->mainDisplay.index == 0);
+                uint8_t atEnd = (idxEnd >= context->mainDisplay.length);
 
-                // Pause at the beginning of the text
-                if (context->mainDisplay.index == 0) {
-                    if (metaMode == MENU_SINGLELINE_SETTING_METADATA_MODE_STATIC ||
-                        context->mainDisplay.timeout == CD53_TIMEOUT_SCROLL_STOP_NEXT_ITR
-                    ) {
-                        context->mainDisplay.timeout = CD53_TIMEOUT_SCROLL_STOP;
-                    } else {
-                        context->mainDisplay.timeout = 20;
-                    }
-                }
-
-                if (idxEnd >= context->mainDisplay.length) {
-                    // Pause at the end of the text or on the next iteration
-                    // if we have Party Single Scroll mode enabled
-                    context->mainDisplay.index = 0;
-                    if (metaMode == MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY_SINGLE) {
-                        context->mainDisplay.timeout = CD53_TIMEOUT_SCROLL_STOP_NEXT_ITR;
-                    } else{
-                        context->mainDisplay.timeout = 8;
-                    }
-                } else {
-                    if (context->mode == CD53_MODE_ACTIVE) {
-                        if (metaMode == MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNK) {
+                switch (metaMode) {
+                    case MENU_SINGLELINE_SETTING_METADATA_MODE_STATIC:
+                        // Show the first window once, then stop scrolling
+                        if (atStart) {
+                            context->mainDisplay.timeout = CD53_TIMEOUT_SCROLL_STOP;
+                        }
+                        if (atEnd) {
+                            context->mainDisplay.index = 0;
                             context->mainDisplay.timeout = 8;
-                            context->mainDisplay.index += CD53_DISPLAY_TEXT_LEN;
-                        } else if (metaMode == MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY ||
-                            metaMode == MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY_SINGLE
-                        ) {
+                        } else if (context->mode != CD53_MODE_ACTIVE) {
+                            // Party scroll outside metadata view (menus, etc.)
                             context->mainDisplay.index++;
                         }
-                    } else {
-                        // Use Party Scroll for all modes except metadata
-                        context->mainDisplay.index++;
+                        break;
+                    case MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNK:
+                        // Screen updates in "chunks", whole windows at a time.
+                        if (atStart) {
+                            context->mainDisplay.timeout = 20;
+                        }
+                        if (atEnd) {
+                            context->mainDisplay.index = 0;
+                            context->mainDisplay.timeout = 8;
+                        } else if (context->mode == CD53_MODE_ACTIVE) {
+                            context->mainDisplay.timeout = 8;
+                            context->mainDisplay.index += CD53_DISPLAY_TEXT_LEN;
+                        } else {
+                            context->mainDisplay.index++;
+                        }
+                        break;
+                    case MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY:
+                        // Screen scrolls all information
+                        if (atStart) {
+                            context->mainDisplay.timeout = 20;
+                        }
+                        if (atEnd) {
+                            context->mainDisplay.index = 0;
+                            context->mainDisplay.timeout = 8;
+                        } else {
+                            context->mainDisplay.index++;
+                        }
+                        break;
+                    case MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY_SINGLE:
+                        // Scroll through once, then freeze on the first window
+                        if (atStart) {
+                            if (context->mainDisplay.timeout == CD53_TIMEOUT_SCROLL_STOP_NEXT_ITR) {
+                                context->mainDisplay.timeout = CD53_TIMEOUT_SCROLL_STOP;
+                            } else {
+                                context->mainDisplay.timeout = 20;
+                            }
+                        }
+                        if (atEnd) {
+                            // Move on to the next metadata field. Use some of the same structure fields
+                            // for ease of use.
+                            context->mainDisplay.index = 0;
+                            context->mainDisplay.timeout = CD53_TIMEOUT_SCROLL_STOP_NEXT_ITR;
+                        } else {
+                            context->mainDisplay.index++;
+                        }
+                        break;
+                    case MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNKY_PARTY: {
+                        // Chunky Party Mode will "Chunk" to each metadata field, but scroll that
+                        // field if it is too large for the display.
+                        #define displayTitle  0
+                        #define displayArtist 1
+                        #define displayAlbum  2
+
+                        static uint8_t displayedField = displayTitle;
+
+                        if (atStart) {
+                            context->mainDisplay.timeout = 20;
+                        }
+                        if (atEnd) {
+                            // We've finished displaying the current metadata field, update the mainDisplay
+                            // structure
+                            if (displayedField == displayTitle)
+                            {
+                                // Update everything to use the artist information.
+                                context->mainDisplay.length = context->bt->artistLength;
+                                UtilsStrncpy(
+                                    context->mainDisplay.text,
+                                    context->bt->artist,
+                                    context->bt->artistLength
+                                );
+                                displayedField = displayArtist;
+                            } else if (displayedField == displayArtist) {
+                                // Update everything to use the album information.
+                                context->mainDisplay.length = context->bt->albumLength;
+                                UtilsStrncpy(
+                                    context->mainDisplay.text,
+                                    context->bt->album,
+                                    context->bt->albumLength
+                                );
+                                displayedField = displayAlbum;
+                            } else {
+                            // displayedField == displayAlbum
+                                // Update everything to use the track title information.
+                                context->mainDisplay.length = context->bt->titleLength;
+                                UtilsStrncpy(
+                                    context->mainDisplay.text,
+                                    context->bt->title,
+                                    context->bt->titleLength
+                                );
+                                displayedField = displayTitle;
+                            }
+
+                            context->mainDisplay.index = 0;
+                            context->mainDisplay.timeout = 8;
+                        } else if (context->mode != CD53_MODE_ACTIVE) {
+                            context->mainDisplay.index++;
+                        }
+                        break;
                     }
+                    case MENU_SINGLELINE_SETTING_METADATA_MODE_OFF: // Intentional Fall-Through
+                    default:
+                        if (atStart) {
+                            context->mainDisplay.timeout = 20;
+                        }
+                        if (atEnd) {
+                            context->mainDisplay.index = 0;
+                            context->mainDisplay.timeout = 8;
+                        } else if (context->mode != CD53_MODE_ACTIVE) {
+                            context->mainDisplay.index++;
+                        }
+                        break;
                 }
             } else {
                 if (context->mainDisplay.index == 0) {

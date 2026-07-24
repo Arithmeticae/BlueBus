@@ -933,8 +933,8 @@ void MenuSingleLineSettingsNextValue(MenuSingleLineContext_t *context, uint8_t d
 {
     // Select different configuration options
     if (context->settingIdx == MENU_SINGLELINE_SETTING_IDX_METADATA_MODE) {
-        // Advance to the next setting, can't use mod rollover as 0 is valid option.
-        context->settingValue = (context->settingValue == MENU_SINGLELINE_SETTING_METADATA_MODE_LAST_OPTION) ? 0 : (context->settingValue + 1);
+        // Advance to the next setting, with rollover.
+        context->settingValue = (context->settingValue + 1) % MENU_SINGLELINE_SETTING_METADATA_MODE_NUMBER_OF_OPTIONS;
         MenuSingleLineSettings(context);
     }
 
