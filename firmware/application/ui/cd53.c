@@ -210,6 +210,74 @@ static void CD53RedisplayText(CD53Context_t *context)
 static uint8_t CD53ChunkyPartyField = CD53_METADATA_FIELD_TITLE;
 
 /**
+ * CD53ChunkyPartySetField()
+ *     Description:
+ *         Load a Chunky-Party metadata field into the main display buffer.
+ *         Artist is prefixed with "by ", album with "on ".
+ *     Params:
+ *         CD53Context_t *context - The CD53 context
+ *         uint8_t field - Title, artist, or album field
+ *         char *dest - Destination buffer for the field text
+ *     Returns:
+ *         void
+ */
+static void CD53ChunkyPartySetField(
+    CD53Context_t *context,
+    uint8_t field,
+    char *dest
+) {
+    if (field == CD53_METADATA_FIELD_ARTIST) {
+        UtilsStrncpy(dest, "by ", UTILS_DISPLAY_TEXT_SIZE);
+        UtilsStrncpy(
+            &dest[3],
+            context->bt->artist,
+            UTILS_DISPLAY_TEXT_SIZE - 3
+        );
+    } else if (field == CD53_METADATA_FIELD_ALBUM) {
+        UtilsStrncpy(dest, "on ", UTILS_DISPLAY_TEXT_SIZE);
+        UtilsStrncpy(
+            &dest[3],
+            context->bt->album,
+            UTILS_DISPLAY_TEXT_SIZE - 3
+        );
+    } else {
+        UtilsStrncpy(dest, context->bt->title, UTILS_DISPLAY_TEXT_SIZE);
+    }
+    CD53ChunkyPartyField = field;
+}
+
+/**
+ * CD53ChunkyPartyNextField()
+ *     Description:
+ *         Advance to the next non-empty Chunky-Party metadata field.
+ *     Params:
+ *         CD53Context_t *context - The CD53 context
+ *     Returns:
+ *         void
+ */
+static void CD53ChunkyPartyNextField(CD53Context_t *context)
+{
+    uint8_t nextField = CD53ChunkyPartyField;
+
+    do {
+        nextField++;
+        if (nextField > CD53_METADATA_FIELD_ALBUM) {
+            nextField = CD53_METADATA_FIELD_TITLE;
+        }
+    } while (
+        (nextField == CD53_METADATA_FIELD_ARTIST &&
+            context->bt->artistLength == 0) ||
+        (nextField == CD53_METADATA_FIELD_ALBUM &&
+            context->bt->albumLength == 0)
+    );
+
+    CD53ChunkyPartySetField(context, nextField, context->mainDisplay.text);
+    context->mainDisplay.length = strlen(context->mainDisplay.text);
+    context->mainDisplay.index = 0;
+    context->mainDisplay.timeout = 8;
+}
+
+/**
  * CD53UIDisplayUpdateText()
  *     Description:
  *         Handle updates from the menu driver
@@ -455,16 +523,12 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
 
     if (metaMode == MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNKY_PARTY) {
         // Show one metadata field at a time, starting with the title.
-        UtilsStrncpy(
-            context->mainDisplay.text,
-            context->bt->title,
-            UTILS_DISPLAY_TEXT_SIZE
+        CD53ChunkyPartySetField(context, CD53_METADATA_FIELD_TITLE, text);
+        CD53SetMainDisplayText(
+            context,
+            text,
+            3000 / CD53_DISPLAY_SCROLL_SPEED
         );
-        context->mainDisplay.length = strlen(context->mainDisplay.text);
-        context->mainDisplay.index = 0;
-        CD53ChunkyPartyField = CD53_METADATA_FIELD_TITLE;
-        TimerResetScheduledTask(context->displayUpdateTaskId);
-        context->mainDisplay.timeout = 3000 / CD53_DISPLAY_SCROLL_SPEED;
     } else {
         if ((context->bt->artistLength > 0) && (context->bt->albumLength > 0)) {
             snprintf(
@@ -777,47 +841,7 @@ void CD53TimerDisplay(void *ctx)
                         context->mainDisplay.timeout = 20;
                     }
                     if (idxEnd >= context->mainDisplay.length) {
-                        uint8_t nextField = CD53ChunkyPartyField;
-                        char *fieldText = context->mainDisplay.text;
-
-                        do {
-                            nextField++;
-                            if (nextField > CD53_METADATA_FIELD_ALBUM) {
-                                nextField = CD53_METADATA_FIELD_TITLE;
-                            }
-                        } while (
-                            (nextField == CD53_METADATA_FIELD_ARTIST &&
-                                context->bt->artistLength == 0) ||
-                            (nextField == CD53_METADATA_FIELD_ALBUM &&
-                                context->bt->albumLength == 0)
-                        );
-
-                        if (nextField == CD53_METADATA_FIELD_ARTIST) {
-                            UtilsStrncpy(fieldText, "by ", UTILS_DISPLAY_TEXT_SIZE);
-                            UtilsStrncpy(
-                                &fieldText[3],
-                                context->bt->artist,
-                                UTILS_DISPLAY_TEXT_SIZE - 3
-                            );
-                        } else if (nextField == CD53_METADATA_FIELD_ALBUM) {
-                            UtilsStrncpy(fieldText, "on ", UTILS_DISPLAY_TEXT_SIZE);
-                            UtilsStrncpy(
-                                &fieldText[3],
-                                context->bt->album,
-                                UTILS_DISPLAY_TEXT_SIZE - 3
-                            );
-                        } else {
-                            UtilsStrncpy(
-                                fieldText,
-                                context->bt->title,
-                                UTILS_DISPLAY_TEXT_SIZE
-                            );
-                        }
-
-                        CD53ChunkyPartyField = nextField;
-                        context->mainDisplay.length = strlen(fieldText);
-                        context->mainDisplay.index = 0;
-                        context->mainDisplay.timeout = 8;
+                        CD53ChunkyPartyNextField(context);
                     } else {
                         context->mainDisplay.index++;
                     }
@@ -883,47 +907,7 @@ void CD53TimerDisplay(void *ctx)
                         context->mainDisplay.index = 1;
                         context->mainDisplay.timeout = 20;
                     } else {
-                        uint8_t nextField = CD53ChunkyPartyField;
-                        char *fieldText = context->mainDisplay.text;
-
-                        do {
-                            nextField++;
-                            if (nextField > CD53_METADATA_FIELD_ALBUM) {
-                                nextField = CD53_METADATA_FIELD_TITLE;
-                            }
-                        } while (
-                            (nextField == CD53_METADATA_FIELD_ARTIST &&
-                                context->bt->artistLength == 0) ||
-                            (nextField == CD53_METADATA_FIELD_ALBUM &&
-                                context->bt->albumLength == 0)
-                        );
-
-                        if (nextField == CD53_METADATA_FIELD_ARTIST) {
-                            UtilsStrncpy(fieldText, "by ", UTILS_DISPLAY_TEXT_SIZE);
-                            UtilsStrncpy(
-                                &fieldText[3],
-                                context->bt->artist,
-                                UTILS_DISPLAY_TEXT_SIZE - 3
-                            );
-                        } else if (nextField == CD53_METADATA_FIELD_ALBUM) {
-                            UtilsStrncpy(fieldText, "on ", UTILS_DISPLAY_TEXT_SIZE);
-                            UtilsStrncpy(
-                                &fieldText[3],
-                                context->bt->album,
-                                UTILS_DISPLAY_TEXT_SIZE - 3
-                            );
-                        } else {
-                            UtilsStrncpy(
-                                fieldText,
-                                context->bt->title,
-                                UTILS_DISPLAY_TEXT_SIZE
-                            );
-                        }
-
-                        CD53ChunkyPartyField = nextField;
-                        context->mainDisplay.length = strlen(fieldText);
-                        context->mainDisplay.index = 0;
-                        context->mainDisplay.timeout = 8;
+                        CD53ChunkyPartyNextField(context);
                     }
                 } else {
                     if (context->mainDisplay.index == 0) {
