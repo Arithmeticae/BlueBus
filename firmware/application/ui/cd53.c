@@ -581,6 +581,9 @@ void CD53BTPlaybackStatus(void *ctx, unsigned char *status)
                 CD53SetMainDisplayText(context, "Paused", 0);
             }
         } else {
+            // Fetch metadata on play so power-on autoplay updates the display.
+            // CDC start often requests metadata before AVRCP is ready.
+            BTCommandGetMetadata(context->bt);
             if (context->mediaChangeState == CD53_MEDIA_STATE_OK ||
                 (context->mediaChangeState == CD53_MEDIA_STATE_CHANGE &&
                  strlen(context->bt->title) > 0)
@@ -635,6 +638,9 @@ void CD53GTScreenModeSet(void *ctx, uint8_t *pkt)
         context->mode = CD53_MODE_ACTIVE_DISPLAY_OFF;
     } else {
         context->mode = CD53_MODE_ACTIVE;
+        if (context->displayMetadata == CD53_DISPLAY_METADATA_ON) {
+            CD53BTMetadata(context, 0x00);
+        }
     }
 }
 
