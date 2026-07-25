@@ -209,62 +209,6 @@ static void CD53RedisplayText(CD53Context_t *context)
 
 static uint8_t CD53ChunkyPartyField = CD53_METADATA_FIELD_TITLE;
 
-static const char *CD53MetadataFieldText(CD53Context_t *context, uint8_t field)
-{
-    if (field == CD53_METADATA_FIELD_ARTIST) {
-        return context->bt->artist;
-    }
-    if (field == CD53_METADATA_FIELD_ALBUM) {
-        return context->bt->album;
-    }
-    return context->bt->title;
-}
-
-static uint8_t CD53MetadataFieldLength(CD53Context_t *context, uint8_t field)
-{
-    if (field == CD53_METADATA_FIELD_ARTIST) {
-        return context->bt->artistLength;
-    }
-    if (field == CD53_METADATA_FIELD_ALBUM) {
-        return context->bt->albumLength;
-    }
-    return context->bt->titleLength;
-}
-
-static uint8_t CD53ChunkyPartyNextField(CD53Context_t *context, uint8_t field)
-{
-    uint8_t next = field;
-    uint8_t i;
-
-    for (i = 0; i < 3; i++) {
-        next++;
-        if (next > CD53_METADATA_FIELD_ALBUM) {
-            next = CD53_METADATA_FIELD_TITLE;
-        }
-        if (CD53MetadataFieldLength(context, next) > 0) {
-            return next;
-        }
-    }
-    return CD53_METADATA_FIELD_TITLE;
-}
-
-static void CD53ChunkyPartyLoadField(CD53Context_t *context, uint8_t field)
-{
-    const char *text = CD53MetadataFieldText(context, field);
-
-    UtilsStrncpy(context->mainDisplay.text, text, UTILS_DISPLAY_TEXT_SIZE);
-    context->mainDisplay.length = strlen(context->mainDisplay.text);
-    context->mainDisplay.index = 0;
-    CD53ChunkyPartyField = field;
-}
-
-static void CD53ChunkyPartyAdvanceField(CD53Context_t *context)
-{
-    uint8_t next = CD53ChunkyPartyNextField(context, CD53ChunkyPartyField);
-    CD53ChunkyPartyLoadField(context, next);
-    context->mainDisplay.timeout = 8;
-}
-
 /**
  * CD53UIDisplayUpdateText()
  *     Description:
@@ -511,7 +455,14 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
 
     if (metaMode == MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNKY_PARTY) {
         // Show one metadata field at a time, starting with the title.
-        CD53ChunkyPartyLoadField(context, CD53_METADATA_FIELD_TITLE);
+        UtilsStrncpy(
+            context->mainDisplay.text,
+            context->bt->title,
+            UTILS_DISPLAY_TEXT_SIZE
+        );
+        context->mainDisplay.length = strlen(context->mainDisplay.text);
+        context->mainDisplay.index = 0;
+        CD53ChunkyPartyField = CD53_METADATA_FIELD_TITLE;
         TimerResetScheduledTask(context->displayUpdateTaskId);
         context->mainDisplay.timeout = 3000 / CD53_DISPLAY_SCROLL_SPEED;
     } else {
@@ -826,7 +777,47 @@ void CD53TimerDisplay(void *ctx)
                         context->mainDisplay.timeout = 20;
                     }
                     if (idxEnd >= context->mainDisplay.length) {
-                        CD53ChunkyPartyAdvanceField(context);
+                        uint8_t nextField = CD53ChunkyPartyField;
+                        char *fieldText = context->mainDisplay.text;
+
+                        do {
+                            nextField++;
+                            if (nextField > CD53_METADATA_FIELD_ALBUM) {
+                                nextField = CD53_METADATA_FIELD_TITLE;
+                            }
+                        } while (
+                            (nextField == CD53_METADATA_FIELD_ARTIST &&
+                                context->bt->artistLength == 0) ||
+                            (nextField == CD53_METADATA_FIELD_ALBUM &&
+                                context->bt->albumLength == 0)
+                        );
+
+                        if (nextField == CD53_METADATA_FIELD_ARTIST) {
+                            UtilsStrncpy(fieldText, "by ", UTILS_DISPLAY_TEXT_SIZE);
+                            UtilsStrncpy(
+                                &fieldText[3],
+                                context->bt->artist,
+                                UTILS_DISPLAY_TEXT_SIZE - 3
+                            );
+                        } else if (nextField == CD53_METADATA_FIELD_ALBUM) {
+                            UtilsStrncpy(fieldText, "on ", UTILS_DISPLAY_TEXT_SIZE);
+                            UtilsStrncpy(
+                                &fieldText[3],
+                                context->bt->album,
+                                UTILS_DISPLAY_TEXT_SIZE - 3
+                            );
+                        } else {
+                            UtilsStrncpy(
+                                fieldText,
+                                context->bt->title,
+                                UTILS_DISPLAY_TEXT_SIZE
+                            );
+                        }
+
+                        CD53ChunkyPartyField = nextField;
+                        context->mainDisplay.length = strlen(fieldText);
+                        context->mainDisplay.index = 0;
+                        context->mainDisplay.timeout = 8;
                     } else {
                         context->mainDisplay.index++;
                     }
@@ -892,7 +883,47 @@ void CD53TimerDisplay(void *ctx)
                         context->mainDisplay.index = 1;
                         context->mainDisplay.timeout = 20;
                     } else {
-                        CD53ChunkyPartyAdvanceField(context);
+                        uint8_t nextField = CD53ChunkyPartyField;
+                        char *fieldText = context->mainDisplay.text;
+
+                        do {
+                            nextField++;
+                            if (nextField > CD53_METADATA_FIELD_ALBUM) {
+                                nextField = CD53_METADATA_FIELD_TITLE;
+                            }
+                        } while (
+                            (nextField == CD53_METADATA_FIELD_ARTIST &&
+                                context->bt->artistLength == 0) ||
+                            (nextField == CD53_METADATA_FIELD_ALBUM &&
+                                context->bt->albumLength == 0)
+                        );
+
+                        if (nextField == CD53_METADATA_FIELD_ARTIST) {
+                            UtilsStrncpy(fieldText, "by ", UTILS_DISPLAY_TEXT_SIZE);
+                            UtilsStrncpy(
+                                &fieldText[3],
+                                context->bt->artist,
+                                UTILS_DISPLAY_TEXT_SIZE - 3
+                            );
+                        } else if (nextField == CD53_METADATA_FIELD_ALBUM) {
+                            UtilsStrncpy(fieldText, "on ", UTILS_DISPLAY_TEXT_SIZE);
+                            UtilsStrncpy(
+                                &fieldText[3],
+                                context->bt->album,
+                                UTILS_DISPLAY_TEXT_SIZE - 3
+                            );
+                        } else {
+                            UtilsStrncpy(
+                                fieldText,
+                                context->bt->title,
+                                UTILS_DISPLAY_TEXT_SIZE
+                            );
+                        }
+
+                        CD53ChunkyPartyField = nextField;
+                        context->mainDisplay.length = strlen(fieldText);
+                        context->mainDisplay.index = 0;
+                        context->mainDisplay.timeout = 8;
                     }
                 } else {
                     if (context->mainDisplay.index == 0) {
