@@ -262,20 +262,20 @@ void MenuSingleLineSetUIView(MenuSingleLineContext_t *context, uint8_t view)
 }
 
 /**
- * MenuSingleLineSettings()
+ * MenuSingleLineSettingsDisplayMetadataMode()
  *     Description:
- *         Initialize the settings menu
+ *         Update the display for a metadata mode value without changing
+ *         settingMode or reloading the saved configuration.
  *     Params:
  *         MenuSingleLineContext_t *context - Pointer to the context
+ *         uint8_t value - Metadata mode value to display
  *     Returns:
  *         void
  */
-void MenuSingleLineSettings(MenuSingleLineContext_t *context)
-{
-    uint8_t value = ConfigGetSetting(
-        CONFIG_SETTING_METADATA_MODE
-    );
-
+static void MenuSingleLineSettingsDisplayMetadataMode(
+    MenuSingleLineContext_t *context,
+    uint8_t value
+) {
     switch (value) {
         case MENU_SINGLELINE_SETTING_METADATA_MODE_OFF:
             MenuSingleLineSetDisplayText(
@@ -326,10 +326,26 @@ void MenuSingleLineSettings(MenuSingleLineContext_t *context)
             );
             break;
         default:
-            // No default case.
             break;
     }
+}
 
+/**
+ * MenuSingleLineSettings()
+ *     Description:
+ *         Initialize the settings menu
+ *     Params:
+ *         MenuSingleLineContext_t *context - Pointer to the context
+ *     Returns:
+ *         void
+ */
+void MenuSingleLineSettings(MenuSingleLineContext_t *context)
+{
+    uint8_t value = ConfigGetSetting(
+        CONFIG_SETTING_METADATA_MODE
+    );
+
+    MenuSingleLineSettingsDisplayMetadataMode(context, value);
     context->settingIdx = MENU_SINGLELINE_SETTING_IDX_METADATA_MODE;
     context->settingValue = value;
     context->settingMode = MENU_SINGLELINE_SETTING_MODE_SCROLL_SETTINGS;
@@ -550,7 +566,9 @@ void MenuSingleLineSettingsNextSetting(MenuSingleLineContext_t *context, uint8_t
     context->settingIdx = nextMenu;
 
     if (nextMenu == MENU_SINGLELINE_SETTING_IDX_METADATA_MODE) {
-        MenuSingleLineSettings(context);
+        uint8_t value = ConfigGetSetting(CONFIG_SETTING_METADATA_MODE);
+        MenuSingleLineSettingsDisplayMetadataMode(context, value);
+        context->settingValue = value;
     }
 
     if (nextMenu == MENU_SINGLELINE_SETTING_IDX_AUTOPLAY) {
@@ -934,8 +952,9 @@ void MenuSingleLineSettingsNextValue(MenuSingleLineContext_t *context, uint8_t d
     // Select different configuration options
     if (context->settingIdx == MENU_SINGLELINE_SETTING_IDX_METADATA_MODE) {
         // Advance to the next setting, with rollover.
-        context->settingValue = (context->settingValue + 1) % MENU_SINGLELINE_SETTING_METADATA_MODE_NUMBER_OF_OPTIONS;
-        MenuSingleLineSettings(context);
+        context->settingValue = (context->settingValue + 1) %
+            MENU_SINGLELINE_SETTING_METADATA_MODE_NUMBER_OF_OPTIONS;
+        MenuSingleLineSettingsDisplayMetadataMode(context, context->settingValue);
     }
 
     if (context->settingIdx == MENU_SINGLELINE_SETTING_IDX_AUDIO_DSP &&
