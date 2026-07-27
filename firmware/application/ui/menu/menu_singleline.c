@@ -269,64 +269,48 @@ void MenuSingleLineSetUIView(MenuSingleLineContext_t *context, uint8_t view)
  *     Params:
  *         MenuSingleLineContext_t *context - Pointer to the context
  *         uint8_t value - Metadata mode value to display
+ *         uint8_t includeLabel - Prefix the value with "Metadata: " when true
  *     Returns:
  *         void
  */
 static void MenuSingleLineSettingsDisplayMetadataMode(
     MenuSingleLineContext_t *context,
-    uint8_t value
+    uint8_t value,
+    uint8_t includeLabel
 ) {
+    const char *text = 0;
+
     switch (value) {
         case MENU_SINGLELINE_SETTING_METADATA_MODE_OFF:
-            MenuSingleLineSetDisplayText(
-                context,
-                "Metadata: Off",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
+            text = includeLabel ? "Metadata: Off" : "Off";
             break;
         case MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY:
-            MenuSingleLineSetDisplayText(
-                context,
-                "Metadata: Party",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
+            text = includeLabel ? "Metadata: Party" : "Party";
             break;
         case MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNK:
-            MenuSingleLineSetDisplayText(
-                context,
-                "Metadata: Chunk",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
+            text = includeLabel ? "Metadata: Chunk" : "Chunk";
             break;
         case MENU_SINGLELINE_SETTING_METADATA_MODE_PARTY_SINGLE:
-            MenuSingleLineSetDisplayText(
-                context,
-                "Metadata: Party-Single",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
+            text = includeLabel ? "Metadata: Party-Single" : "Party-Single";
             break;
         case MENU_SINGLELINE_SETTING_METADATA_MODE_STATIC:
-            MenuSingleLineSetDisplayText(
-                context,
-                "Metadata: Static",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
+            text = includeLabel ? "Metadata: Static" : "Static";
             break;
         case MENU_SINGLELINE_SETTING_METADATA_MODE_CHUNKY_PARTY:
-            MenuSingleLineSetDisplayText(
-                context,
-                "Metadata: Chunky-Party",
-                0,
-                MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
-            );
+            text = includeLabel ? "Metadata: Field-Scroll" : "Field-Scroll";
             break;
         default:
+            // No default case
             break;
+    }
+
+    if (text != 0) {
+        MenuSingleLineSetDisplayText(
+            context,
+            text,
+            0,
+            MENU_SINGLELINE_DISPLAY_UPDATE_MAIN
+        );
     }
 }
 
@@ -345,7 +329,7 @@ void MenuSingleLineSettings(MenuSingleLineContext_t *context)
         CONFIG_SETTING_METADATA_MODE
     );
 
-    MenuSingleLineSettingsDisplayMetadataMode(context, value);
+    MenuSingleLineSettingsDisplayMetadataMode(context, value, MENU_SINGLELINE_SETTING_METADATA_SHOW_LABEL);
     context->settingIdx = MENU_SINGLELINE_SETTING_IDX_METADATA_MODE;
     context->settingValue = value;
     context->settingMode = MENU_SINGLELINE_SETTING_MODE_SCROLL_SETTINGS;
@@ -567,7 +551,7 @@ void MenuSingleLineSettingsNextSetting(MenuSingleLineContext_t *context, uint8_t
 
     if (nextMenu == MENU_SINGLELINE_SETTING_IDX_METADATA_MODE) {
         uint8_t value = ConfigGetSetting(CONFIG_SETTING_METADATA_MODE);
-        MenuSingleLineSettingsDisplayMetadataMode(context, value);
+        MenuSingleLineSettingsDisplayMetadataMode(context, value, MENU_SINGLELINE_SETTING_METADATA_SHOW_LABEL);
         context->settingValue = value;
     }
 
@@ -954,7 +938,7 @@ void MenuSingleLineSettingsNextValue(MenuSingleLineContext_t *context, uint8_t d
         // Advance to the next setting, with rollover.
         context->settingValue = (context->settingValue + 1) %
             MENU_SINGLELINE_SETTING_METADATA_MODE_NUMBER_OF_OPTIONS;
-        MenuSingleLineSettingsDisplayMetadataMode(context, context->settingValue);
+        MenuSingleLineSettingsDisplayMetadataMode(context, context->settingValue, MENU_SINGLELINE_SETTING_METADATA_HIDE_LABEL);
     }
 
     if (context->settingIdx == MENU_SINGLELINE_SETTING_IDX_AUDIO_DSP &&

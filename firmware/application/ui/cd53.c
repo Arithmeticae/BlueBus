@@ -570,7 +570,13 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
 void CD53BTPlaybackStatus(void *ctx, unsigned char *status)
 {
     CD53Context_t *context = (CD53Context_t *) ctx;
-    // Display "Paused" if we're in Bluetooth mode
+
+    // Fetch metadata whenever playback starts. During power-on autoplay this
+    // event may arrive before the radio has entered CDC mode.
+    if (context->bt->playbackStatus == BT_AVRCP_STATUS_PLAYING) {
+        BTCommandGetMetadata(context->bt);
+    }
+
     if (context->ibus->cdChangerFunction == IBUS_CDC_FUNC_PLAYING &&
         context->mode == CD53_MODE_ACTIVE &&
         context->displayMetadata == CD53_DISPLAY_METADATA_ON
@@ -826,9 +832,10 @@ void CD53TimerDisplay(void *ctx)
                 );
 
                 // If we start with a space, it will be ignored by the display
-                // Instead, use 0x9D which results in a true blank being displayed
+                // Instead, use 0x9D which results in a true blank being displayed (except on
+                // the CD53, which displays a '*' character)
                 if (text[0] == 0x20) {
-                    text[0] = IBUS_RAD_SPACE_CHAR_ALT;
+                    text[0] = IBUS_RAD_NBSP_CHAR;
                 }
 
                 if (context->radioType == CONFIG_UI_CD53) {
