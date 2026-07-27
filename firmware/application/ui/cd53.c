@@ -50,6 +50,11 @@ void CD53Init(BT_t *bt, IBus_t *ibus)
         &Context
     );
     EventRegisterCallback(
+        BT_EVENT_DEVICE_LINK_CONNECTED,
+        &CD53BTDeviceLinkConnected,
+        &Context
+    );
+    EventRegisterCallback(
         BT_EVENT_DEVICE_LINK_DISCONNECTED,
         &CD53BTDeviceDisconnected,
         &Context
@@ -123,6 +128,10 @@ void CD53Destroy()
     EventUnregisterCallback(
         BT_EVENT_CALL_STATUS_UPDATE,
         &CD53BTCallStatus
+    );
+    EventUnregisterCallback(
+        BT_EVENT_DEVICE_LINK_CONNECTED,
+        &CD53BTDeviceLinkConnected
     );
     EventUnregisterCallback(
         BT_EVENT_DEVICE_LINK_DISCONNECTED,
@@ -489,6 +498,27 @@ void CD53BTDeviceDisconnected(void *ctx, unsigned char *tmp)
     }
 }
 
+/**
+ * CD53BTDeviceLinkConnected()
+ *     Description:
+ *         Request the metadata once the AVRCP link opens. Requests issued
+ *         before the link is up are discarded by the BT module.
+ *     Params:
+ *         void *ctx - A void pointer to the CD53Context_t struct
+ *         unsigned char *data - The connected link type
+ *     Returns:
+ *         void
+ */
+void CD53BTDeviceLinkConnected(void *ctx, unsigned char *data)
+{
+    CD53Context_t *context = (CD53Context_t *) ctx;
+    if (*data == BT_LINK_TYPE_AVRCP &&
+        context->ibus->cdChangerFunction == IBUS_CDC_FUNC_PLAYING
+    ) {
+        BTCommandGetMetadata(context->bt);
+    }
+}
+
 void CD53BTDeviceReady(void *ctx, unsigned char *tmp)
 {
     CD53Context_t *context = (CD53Context_t *) ctx;
@@ -514,8 +544,13 @@ void CD53BTMetadata(CD53Context_t *context, uint8_t *data)
         context->bt->titleLength == 0
     ) {
         // Prevent overwriting the display with non-useful data.
+        // The BT modules only raise an event when the metadata changes, so
+        // note any update we cannot display now and replay it once the
+        // display becomes available again.
+        context->metadataPending = (context->bt->titleLength > 0);
         return;
     }
+    context->metadataPending = 0;
 
     char text[UTILS_DISPLAY_TEXT_SIZE] = {0};
     uint8_t metaMode = ConfigGetSetting(CONFIG_SETTING_METADATA_MODE);
@@ -572,7 +607,10 @@ void CD53BTPlaybackStatus(void *ctx, unsigned char *status)
 
     // Fetch metadata whenever playback starts. During power-on autoplay this
     // event may arrive before the radio has entered CDC mode.
-    if (context->bt->playbackStatus == BT_AVRCP_STATUS_PLAYING) {
+    if (context->bt->playbackStatus == BT_AVRCP_STATUS_PLAYING &&
+        context->bt->activeDevice.avrcpId != 0 &&
+        TimerGetMillis() - context->bt->metadataTimestamp >= CD53_METADATA_REQUEST_INT
+    ) {
         BTCommandGetMetadata(context->bt);
     }
 
@@ -759,6 +797,12 @@ void CD53TimerDisplay(void *ctx)
         context->mode == CD53_MODE_ACTIVE_DISPLAY_OFF
     ) {
         return;
+    }
+
+    if (context->metadataPending == 1 &&
+        context->displayMetadata == CD53_DISPLAY_METADATA_ON
+    ) {
+        CD53BTMetadata(context, 0x00);
     }
 
     if (context->scrollTick < 3) {

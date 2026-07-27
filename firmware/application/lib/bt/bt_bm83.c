@@ -13,6 +13,7 @@
 #include "../event.h"
 #include "../locale.h"
 #include "../log.h"
+#include "../timer.h"
 #include "../utils.h"
 
 int8_t BTBM83MicGainTable[] = {
@@ -68,6 +69,10 @@ void BM83CommandAVRCPGetCapabilities(BT_t *bt)
  */
 void BM83CommandAVRCPGetElementAttributesAll(BT_t *bt)
 {
+    if (bt->activeDevice.avrcpId == 0) {
+        LogWarning("BT: Unable to get Metadata - AVRCP link unopened");
+        return;
+    }
     uint8_t command[] = {
         BM83_CMD_AVC_VENDOR_DEPENDENT_CMD,
         bt->activeDevice.deviceId & 0xF, // Linked Database, the lower nibble
@@ -86,6 +91,7 @@ void BM83CommandAVRCPGetElementAttributesAll(BT_t *bt)
         0x00
     };
     BM83SendCommand(bt, command, sizeof(command));
+    bt->metadataTimestamp = TimerGetMillis();
 }
 
 /**
