@@ -265,10 +265,9 @@ static void CD53ChunkyPartyNextField(CD53Context_t *context)
             nextField = CD53_METADATA_FIELD_TITLE;
         }
     } while (
-        (nextField == CD53_METADATA_FIELD_ARTIST &&
-            context->bt->artistLength == 0) ||
-        (nextField == CD53_METADATA_FIELD_ALBUM &&
-            context->bt->albumLength == 0)
+        // If any of the current fields are empty, advance to the next field
+        (nextField == CD53_METADATA_FIELD_ARTIST && context->bt->artistLength == 0) ||
+        (nextField == CD53_METADATA_FIELD_ALBUM && context->bt->albumLength == 0)
     );
 
     CD53ChunkyPartySetField(context, nextField, context->mainDisplay.text);
