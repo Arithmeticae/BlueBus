@@ -587,9 +587,6 @@ void CD53BTPlaybackStatus(void *ctx, unsigned char *status)
                 CD53SetMainDisplayText(context, "Paused", 0);
             }
         } else {
-            // Fetch metadata on play so power-on autoplay updates the display.
-            // CDC start often requests metadata before AVRCP is ready.
-            BTCommandGetMetadata(context->bt);
             if (context->mediaChangeState == CD53_MEDIA_STATE_OK ||
                 (context->mediaChangeState == CD53_MEDIA_STATE_CHANGE &&
                  strlen(context->bt->title) > 0)
@@ -835,7 +832,7 @@ void CD53TimerDisplay(void *ctx)
                 // Instead, use 0x9D which results in a true blank being displayed (except on
                 // the CD53, which displays a '*' character)
                 if (text[0] == 0x20) {
-                    text[0] = IBUS_RAD_NBSP_CHAR;
+                    text[0] = IBUS_RAD_SPACE_CHAR_ALT;
                 }
 
                 if (context->radioType == CONFIG_UI_CD53) {
