@@ -97,8 +97,8 @@ void HandlerIBusInit(HandlerContext_t *context)
         context
     );
     EventRegisterCallback(
-        IBUS_EVENT_LCM_REDUNDANT_DATA,
-        &HandlerIBusLMRedundantData,
+        IBUS_EVENT_REDUNDANT_DATA,
+        &HandlerIBusRedundantData,
         context
     );
     EventRegisterCallback(
@@ -300,8 +300,8 @@ static void HandlerIBusLMActivateBulbs(
     uint8_t homeLights = context->lmState.homeLightsMode;
     switch (event) {
         case HANDLER_LM_EVENT_ALL_OFF:
-            parkingLamps = HANDLER_LM_COMF_PARKING_OFF;
-            context->lmState.parkingLampsMode = HANDLER_LM_COMF_PARKING_OFF;
+            parkingLamps = IBUS_LM_PARK_LIGHTS_OFF;
+            context->lmState.parkingLampsMode = IBUS_LM_PARK_LIGHTS_OFF;
             blinkers = HANDLER_LM_COMF_BLINK_OFF;
             context->lmState.blinkMode = HANDLER_LM_COMF_BLINK_OFF;
             break;
@@ -318,12 +318,16 @@ static void HandlerIBusLMActivateBulbs(
             context->lmState.blinkMode = HANDLER_LM_COMF_BLINK_RIGHT;
             break;
         case HANDLER_LM_EVENT_PARKING_OFF:
-            parkingLamps = HANDLER_LM_COMF_PARKING_OFF;
-            context->lmState.parkingLampsMode = HANDLER_LM_COMF_PARKING_OFF;
+            parkingLamps = IBUS_LM_PARK_LIGHTS_OFF;
+            context->lmState.parkingLampsMode = IBUS_LM_PARK_LIGHTS_OFF;
             break;
-        case HANDLER_LM_EVENT_PARKING_ON:
-            parkingLamps = HANDLER_LM_COMF_PARKING_ON;
-            context->lmState.parkingLampsMode = HANDLER_LM_COMF_PARKING_ON;
+        case HANDLER_LM_EVENT_PARKING_FRONT:
+            parkingLamps = IBUS_LM_PARK_LIGHTS_FRONT;
+            context->lmState.parkingLampsMode = IBUS_LM_PARK_LIGHTS_FRONT;
+            break;
+        case HANDLER_LM_EVENT_PARKING_FRONT_AND_REAR:
+            parkingLamps = IBUS_LM_PARK_LIGHTS_FRONT_AND_REAR;
+            context->lmState.parkingLampsMode = IBUS_LM_PARK_LIGHTS_FRONT_AND_REAR;
             break;
         case HANDLER_LM_EVENT_HOME_FOLLOW:
             homeLights = IBUS_LM_HOME_FOLLOW;
@@ -342,7 +346,7 @@ static void HandlerIBusLMActivateBulbs(
     }
     if (
         blinkers == HANDLER_LM_COMF_BLINK_OFF &&
-        parkingLamps == HANDLER_LM_COMF_PARKING_OFF &&
+        parkingLamps == IBUS_LM_PARK_LIGHTS_OFF &&
         homeLights == IBUS_LM_HOME_OFF
     ) {
         IBusCommandDIATerminateDiag(context->ibus, IBUS_DEVICE_LCM);
@@ -670,6 +674,9 @@ void HandlerIBusGMDiagAck(void *ctx, uint8_t *pkt)
     if (context->gmState.unlockState == HANDLER_ZKE_UNLOCK_STATE_UNLOCKING) {
         context->gmState.unlockState = HANDLER_ZKE_UNLOCK_STATE_OFF;
         IBusCommandGMDoorCenterLockButton(context->ibus);
+    } else if (context->gmState.lockState == HANDLER_ZKE_LOCK_STATE_LOCKING) {
+        context->gmState.lockState = HANDLER_ZKE_LOCK_STATE_OFF;
+        IBusCommandGMDoorLockDriver(context->ibus);
     }
 }
 
@@ -692,6 +699,18 @@ void HandlerIBusGMIdentResponse(void *ctx, uint8_t *pkt)
     }
     if (ConfigGetSetting(CONFIG_GM_VARIANT_ADDRESS) != *pkt) {
         ConfigSetSetting(CONFIG_GM_VARIANT_ADDRESS, *pkt);
+    }
+    // R50/R53 Mini Cooper: the ZKE is also the LSZ -- there is no separate
+    // light module at 0xD0. Redirect all LM requests to the GM address.
+    if (*pkt == IBUS_GM_ZKEBC1) {
+        context->ibus->moduleStatus.LCM = 1;
+        context->ibus->lmVariant = IBUS_LM_ZKEBC1;
+        ConfigSetLMVariant(IBUS_LM_ZKEBC1);
+    }
+    if (*pkt == IBUS_GM_ZKEBC1RD) {
+        context->ibus->moduleStatus.LCM = 1;
+        context->ibus->lmVariant = IBUS_LM_ZKEBC1RD;
+        ConfigSetLMVariant(IBUS_LM_ZKEBC1RD);
     }
 }
 
@@ -749,6 +768,7 @@ void HandlerIBusGMDoorsFlapsStatusResponse(void *ctx, uint8_t *pkt)
         LogInfo(LOG_SOURCE_SYSTEM, "Handler: Central Locks locked");
         context->gmState.doorsLocked = 1;
         context->gmState.unlockState = 0;
+        context->gmState.lockState = 0;
     } else {
         LogInfo(LOG_SOURCE_SYSTEM, "Handler: Central Locks unlocked");
         context->gmState.doorsLocked = 0;
@@ -910,7 +930,6 @@ void HandlerIBusIKEIgnitionStatus(void *ctx, uint8_t *pkt)
             context->monitorStatus = HANDLER_MONITOR_STATUS_UNSET;
             context->gmState.doorsLocked = 0;
             context->gmState.lowSideDoors = 0;
-            TimerUnregisterScheduledTask(&HandlerTimerIBusIdent);
             // Arm Follow Me Home if ignition was at KL15 or above
             uint8_t homeLightss = ConfigGetSetting(CONFIG_SETTING_COMFORT_HOME_LIGHTS);
             if (
@@ -962,6 +981,7 @@ void HandlerIBusIKEIgnitionStatus(void *ctx, uint8_t *pkt)
             UtilsSetPinMode(UTILS_PIN_TEL_ON, 1);
             context->telOnStatus = HANDLER_TEL_ON;
             context->gmState.unlockState = HANDLER_ZKE_UNLOCK_STATE_OFF;
+            context->gmState.lockState = HANDLER_ZKE_LOCK_STATE_OFF;
             LogDebug(LOG_SOURCE_SYSTEM, "Ign On");
             // Reset the metadata so we don't display the wrong data
             BTClearMetadata(context->bt);
@@ -1064,6 +1084,7 @@ void HandlerIBusIKESpeedRPMUpdate(void *ctx, uint8_t *pkt)
                 IBusCommandGMDoorCenterLockButton(context->ibus);
             } else {
                 IBusCommandGMDoorLockAll(context->ibus);
+                context->gmState.lockState = HANDLER_ZKE_LOCK_STATE_LOCKING;
             }
             context->gmState.doorsLocked = 1;
             context->gmState.unlockState = HANDLER_ZKE_UNLOCK_STATE_OFF;
@@ -1334,19 +1355,30 @@ void HandlerIBusLMLightStatus(void *ctx, uint8_t *pkt)
         }
     }
     // Engage ANGEL EYEZ
-    if (parkingLamps == CONFIG_SETTING_ON) {
+    if (parkingLamps == CONFIG_SETTING_COMFORT_PARK_LIGHTS_FRONT) {
         uint8_t lightStatus = pkt[IBUS_PKT_DB1];
         if (
-            context->lmState.parkingLampsMode == HANDLER_LM_COMF_PARKING_ON ||
+            context->lmState.parkingLampsMode == HANDLER_LM_COMF_PARKING_FRONT ||
             UTILS_CHECK_BIT(lightStatus, IBUS_LM_SIG_BIT_PARKING) ||
             UTILS_CHECK_BIT(lightStatus, IBUS_LM_SIG_BIT_LOW_BEAM) ||
             UTILS_CHECK_BIT(lightStatus, IBUS_LM_SIG_BIT_HIGH_BEAM)
         ) {
             return;
         }
-        HandlerIBusLMActivateBulbs(context, HANDLER_LM_EVENT_PARKING_ON);
+        HandlerIBusLMActivateBulbs(context, HANDLER_LM_EVENT_PARKING_FRONT);
+    } else if (parkingLamps == CONFIG_SETTING_COMFORT_PARK_LIGHTS_FRONT_AND_REAR) {
+        uint8_t lightStatus = pkt[IBUS_PKT_DB1];
+        if (
+            context->lmState.parkingLampsMode == HANDLER_LM_COMF_PARKING_FRONT_AND_REAR ||
+            UTILS_CHECK_BIT(lightStatus, IBUS_LM_SIG_BIT_PARKING) ||
+            UTILS_CHECK_BIT(lightStatus, IBUS_LM_SIG_BIT_LOW_BEAM) ||
+            UTILS_CHECK_BIT(lightStatus, IBUS_LM_SIG_BIT_HIGH_BEAM)
+        ) {
+            return;
+        }
+        HandlerIBusLMActivateBulbs(context, HANDLER_LM_EVENT_PARKING_FRONT_AND_REAR);
     } else {
-        if (context->lmState.parkingLampsMode == HANDLER_LM_COMF_PARKING_ON) {
+        if (context->lmState.parkingLampsMode == HANDLER_LM_COMF_PARKING_FRONT || context->lmState.parkingLampsMode == HANDLER_LM_COMF_PARKING_FRONT_AND_REAR) {
             HandlerIBusLMActivateBulbs(context, HANDLER_LM_EVENT_PARKING_OFF);
         }
     }
@@ -1366,69 +1398,18 @@ void HandlerIBusLMLightStatus(void *ctx, uint8_t *pkt)
 void HandlerIBusLMDimmerStatus(void *ctx, uint8_t *pkt)
 {
     HandlerContext_t *context = (HandlerContext_t *) ctx;
-    if (ConfigGetSetting(CONFIG_SETTING_LM_IO_POLL_DISABLED) == CONFIG_SETTING_OFF) {
+    if (
+        ConfigGetSetting(CONFIG_SETTING_LM_IO_POLL_DISABLED) == CONFIG_SETTING_OFF &&
+        context->ibus->lmVariant != IBUS_LM_ZKEBC1 &&
+        context->ibus->lmVariant != IBUS_LM_ZKEBC1RD
+    ) {
         uint8_t checksum = IBusGetLMDimmerChecksum(pkt);
-        if (checksum != context->lmDimmerChecksum) {
-            IBusCommandDIAGetIOStatus(context->ibus, IBUS_DEVICE_LCM);
-            context->lmDimmerChecksum = checksum;
-            context->lmLastIOStatus = TimerGetMillis();
+        if (checksum == context->lmDimmerChecksum) {
+            return;
         }
-    }
-}
-
-/**
- * HandlerIBusLMRedundantData()
- *     Description:
- *         Check the VIN to see if we're in a new vehicle
- *         Raw: D0 10 80 54 50 4E 66 05 80 06 10 42 38 07 00 06 05 81
- *     Params:
- *         void *ctx - The context provided at registration
- *         uint8_t *tmp - Any event data
- *     Returns:
- *         void
- */
-void HandlerIBusLMRedundantData(void *ctx, uint8_t *pkt)
-{
-    HandlerContext_t *context = (HandlerContext_t *) ctx;
-    uint8_t currentVehicleId[5] = {};
-    ConfigGetVehicleIdentity(currentVehicleId);
-    uint8_t vehicleId[] = {
-        pkt[IBUS_PKT_DB1],
-        pkt[IBUS_PKT_DB2],
-        pkt[IBUS_PKT_DB3],
-        pkt[IBUS_PKT_DB4],
-        (pkt[IBUS_PKT_DB5] >> 4) & 0xF,
-    };
-    // Check VIN
-    if (memcmp(&vehicleId, &currentVehicleId, 5) != 0) {
-        char vinTwo[] = {vehicleId[0], vehicleId[1], '\0'};
-        LogWarning(
-            "Detected VIN Change: %s%02x%02x%x",
-            vinTwo,
-            vehicleId[2],
-            vehicleId[3],
-            vehicleId[4]
-        );
-        // Reset what we know about the car
-        ConfigSetByte(CONFIG_UI_MODE, 0x00);
-        ConfigSetByte(CONFIG_NAV_TYPE, 0x00);
-        ConfigSetByte(CONFIG_VEHICLE_TYPE, 0x00);
-        ConfigSetByte(CONFIG_LM_VARIANT, 0x00);
-        ConfigSetByte(CONFIG_GM_VARIANT, 0x00);
-        // Save the new VIN
-        ConfigSetVehicleIdentity(vehicleId);
-        // Request the vehicle configuration
-        IBusCommandIKEGetVehicleConfig(context->ibus);
-        // Fallback to the CD53 UI as appropriate
-        if (context->ibus->moduleStatus.MID == 0 &&
-            context->ibus->moduleStatus.GT == 0 &&
-            context->ibus->moduleStatus.BMBT == 0 &&
-            context->ibus->moduleStatus.VM == 0 &&
-            context->uiMode != CONFIG_UI_CD53
-        ) {
-            LogInfo(LOG_SOURCE_SYSTEM, "Fallback to CD53");
-            HandlerIBusSwitchUI(context, CONFIG_UI_CD53);
-        }
+        IBusCommandDIAGetIOStatus(context->ibus, IBUS_DEVICE_LCM);
+        context->lmDimmerChecksum = checksum;
+        context->lmLastIOStatus = TimerGetMillis();
     }
 }
 
@@ -1748,6 +1729,63 @@ void HandlerIBusPDCStatus(void *ctx, uint8_t *pkt)
 }
 
 /**
+ * HandlerIBusRedundantData()
+ *     Description:
+ *         Check the VIN to see if we're in a new vehicle
+ *         Note: We can also receive redundant data from the ZKE on Mini's
+ *         Raw: D0 10 80 54 50 4E 66 05 80 06 10 42 38 07 00 06 05 81
+ *     Params:
+ *         void *ctx - The context provided at registration
+ *         uint8_t *tmp - Any event data
+ *     Returns:
+ *         void
+ */
+void HandlerIBusRedundantData(void *ctx, uint8_t *pkt)
+{
+    HandlerContext_t *context = (HandlerContext_t *) ctx;
+    uint8_t currentVehicleId[5] = {};
+    ConfigGetVehicleIdentity(currentVehicleId);
+    uint8_t vehicleId[] = {
+        pkt[IBUS_PKT_DB1],
+        pkt[IBUS_PKT_DB2],
+        pkt[IBUS_PKT_DB3],
+        pkt[IBUS_PKT_DB4],
+        (pkt[IBUS_PKT_DB5] >> 4) & 0xF,
+    };
+    // Check VIN
+    if (memcmp(&vehicleId, &currentVehicleId, 5) != 0) {
+        char vinTwo[] = {vehicleId[0], vehicleId[1], '\0'};
+        LogWarning(
+            "Detected VIN Change: %s%02x%02x%x",
+            vinTwo,
+            vehicleId[2],
+            vehicleId[3],
+            vehicleId[4]
+        );
+        // Reset what we know about the car
+        ConfigSetByte(CONFIG_UI_MODE, 0x00);
+        ConfigSetByte(CONFIG_NAV_TYPE, 0x00);
+        ConfigSetByte(CONFIG_VEHICLE_TYPE, 0x00);
+        ConfigSetByte(CONFIG_LM_VARIANT, 0x00);
+        ConfigSetByte(CONFIG_GM_VARIANT, 0x00);
+        // Save the new VIN
+        ConfigSetVehicleIdentity(vehicleId);
+        // Request the vehicle configuration
+        IBusCommandIKEGetVehicleConfig(context->ibus);
+        // Fallback to the CD53 UI as appropriate
+        if (context->ibus->moduleStatus.MID == 0 &&
+            context->ibus->moduleStatus.GT == 0 &&
+            context->ibus->moduleStatus.BMBT == 0 &&
+            context->ibus->moduleStatus.VM == 0 &&
+            context->uiMode != CONFIG_UI_CD53
+        ) {
+            LogInfo(LOG_SOURCE_SYSTEM, "Fallback to CD53");
+            HandlerIBusSwitchUI(context, CONFIG_UI_CD53);
+        }
+    }
+}
+
+/**
  * HandlerIBusVMDIAIdentityResponse()
  *     Description:
  *         Identify the video module hardware and software versions
@@ -2004,6 +2042,14 @@ void HandlerTimerIBusCDCAnnounce(void *ctx)
     uint32_t now = TimerGetMillis();
     uint32_t pollTimeDiff = now - context->cdChangerLastPoll;
     uint32_t radRxTimeDiff = now - context->radLastMessage;
+    if (
+        context->ibus->ignitionStatus == IBUS_IGNITION_KL99 &&
+        radRxTimeDiff >= HANDLER_KL99_RAD_TIMEOUT_MILLIS
+    ) {
+        LogWarning("KL-99: Timeout");
+        IBusSetInternalIgnitionStatus(context->ibus, IBUS_IGNITION_OFF);
+        return;
+    }
     if (pollTimeDiff >= HANDLER_CDC_ANOUNCE_TIMEOUT &&
         radRxTimeDiff < 61000 &&
         HandlerIBusGetIsIgnitionStatusOn(context) == 1
@@ -2055,7 +2101,11 @@ void HandlerTimerIBusCDCSendStatus(void *ctx)
 void HandlerTimerIBusLCMIOStatus(void *ctx)
 {
     HandlerContext_t *context = (HandlerContext_t *) ctx;
-    if (ConfigGetSetting(CONFIG_SETTING_LM_IO_POLL_DISABLED) == CONFIG_SETTING_OFF) {
+    if (
+        ConfigGetSetting(CONFIG_SETTING_LM_IO_POLL_DISABLED) == CONFIG_SETTING_OFF &&
+        context->ibus->lmVariant != IBUS_LM_ZKEBC1 &&
+        context->ibus->lmVariant != IBUS_LM_ZKEBC1RD
+    ) {
         uint32_t now = TimerGetMillis();
         uint32_t timeDiff = now - context->lmLastIOStatus;
         if (timeDiff >= HANDLER_LCM_IO_TIMEOUT && HandlerIBusGetIsIgnitionStatusOn(context) == 1) {
@@ -2157,6 +2207,9 @@ void HandlerTimerIBusIdent(void *ctx)
     HandlerContext_t *context = (HandlerContext_t *) ctx;
     uint8_t lmVariant = ConfigGetLMVariant();
     uint8_t gmVariant = ConfigGetSetting(CONFIG_GM_VARIANT);
+    if (context->ibus->ignitionStatus < IBUS_IGNITION_KL15) {
+        return;
+    }
     if (
         context->ibus->moduleStatus.LCM == 1 &&
         lmVariant == CONFIG_SETTING_OFF
@@ -2166,7 +2219,6 @@ void HandlerTimerIBusIdent(void *ctx)
     }
     if (
         context->ibus->moduleStatus.GM == 1 &&
-        context->ibus->ignitionStatus >= IBUS_IGNITION_KL15 &&
         gmVariant == CONFIG_SETTING_OFF
     ) {
         // Identify the ZKE / GM if we do not have an ID for it

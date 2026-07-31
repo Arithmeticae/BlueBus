@@ -228,6 +228,8 @@ static void IBusHandleGMMessage(IBus_t *ibus, uint8_t *pkt)
     } else if (pkt[IBUS_PKT_CMD] == 0xB0) {
         uint8_t err = IBUS_GM_IDENT_ERR;
         EventTriggerCallback(IBUS_EVENT_GM_IDENT_RESP, &err);
+    } else if (pkt[IBUS_PKT_CMD] == IBUS_CMD_RESP_REDUNDANT_DATA) {
+        EventTriggerCallback(IBUS_EVENT_REDUNDANT_DATA, pkt);
     } else if (
         pkt[IBUS_PKT_DST] == IBUS_DEVICE_DIA &&
         pkt[IBUS_PKT_CMD] == IBUS_CMD_DIA_DIAG_RESPONSE &&
@@ -621,8 +623,8 @@ static void IBusHandleLCMMessage(IBus_t *ibus, uint8_t *pkt)
         pkt[IBUS_PKT_LEN] == 0x03
     ) {
         EventTriggerCallback(IBUS_EVENT_LCM_DIAGNOSTICS_ACKNOWLEDGE, pkt);
-    } else if (pkt[IBUS_PKT_CMD] == IBUS_CMD_LCM_RESP_REDUNDANT_DATA) {
-        EventTriggerCallback(IBUS_EVENT_LCM_REDUNDANT_DATA, pkt);
+    } else if (pkt[IBUS_PKT_CMD] == IBUS_CMD_RESP_REDUNDANT_DATA) {
+        EventTriggerCallback(IBUS_EVENT_REDUNDANT_DATA, pkt);
     } else if (
         pkt[IBUS_PKT_DST] == IBUS_DEVICE_DIA &&
         pkt[IBUS_PKT_CMD] == IBUS_CMD_DIA_DIAG_RESPONSE &&
@@ -1524,9 +1526,12 @@ uint8_t IBusGetLMVariant(uint8_t *packet)
     } else if (diagnosticIndex >= 0x20 && diagnosticIndex <= 0x2f) {
         lmVariant = IBUS_LM_LSZ;
         LogInfo(LOG_SOURCE_IBUS, "Light Module: LSZ");
-    } else if (diagnosticIndex >= 0x30 && diagnosticIndex <= 0x40) {
+    } else if (diagnosticIndex >= 0x30 && diagnosticIndex <= 0x3f) {
         lmVariant = IBUS_LM_LSZ_2;
         LogInfo(LOG_SOURCE_IBUS, "Light Module: LSZ_2");
+    } else if (diagnosticIndex == 0x40) {
+        lmVariant = IBUS_LM_LM2_83;
+        LogInfo(LOG_SOURCE_IBUS, "Light Module: LM2_83");
     }
 
     return lmVariant;
@@ -2263,9 +2268,29 @@ void IBusCommandGMDoorLockAll(IBus_t *ibus)
 }
 
 /**
+ * IBusCommandGMDoorLockDriver()
+ *     Description:
+ *        Issue a diagnostic message to the ZKE5 to lock the driver door
+ *        via its dedicated motor (MVRFT)
+ *     Params:
+ *         IBus_t *ibus - The pointer to the IBus_t object
+ *     Returns:
+ *         void
+ */
+void IBusCommandGMDoorLockDriver(IBus_t *ibus)
+{
+    uint8_t msg[] = {
+        IBUS_CMD_DIA_JOB_REQUEST,
+        IBUS_CMD_ZKE5_JOB_LOCK_DRIVER,
+        0x01
+    };
+    IBusSendCommand(ibus, IBUS_DEVICE_DIA, IBUS_DEVICE_GM, msg, sizeof(msg));
+}
+
+/**
  * IBusCommandGTBMBTControl()
  *     Description:
- *        Issue a diagnostic message to the GM to lock all doors
+ *        Issue a diagnostic message to set the monitor status
  *     Params:
  *         IBus_t *ibus - The pointer to the IBus_t object
  *         uint8_t status - The status to set the monitor to
@@ -2874,13 +2899,20 @@ void IBusCommandLMActivateBulbs(
                 blinker = IBUS_LME38_BLINKER_OFF;
                 break;
         }
-        if (parkingLights == 0x01) {
+        uint8_t tailLeft = IBUS_LM_BULB_OFF;
+        uint8_t tailRight = IBUS_LM_BULB_OFF;
+        if (
+            parkingLights == IBUS_LM_PARK_LIGHTS_FRONT || 
+            parkingLights == IBUS_LM_PARK_LIGHTS_FRONT_AND_REAR
+        ) {
             parkingLightLeft = IBUS_LME38_SIDE_MARKER_LEFT;
             parkingLightRight = IBUS_LME38_SIDE_MARKER_RIGHT;
         }
+        if (parkingLights == IBUS_LM_PARK_LIGHTS_FRONT_AND_REAR) {
+            tailLeft = IBUS_LME38_TAIL_LAMP_L;
+            tailRight = IBUS_LME38_TAIL_LAMP_R;
+        }
         uint8_t highBeam = IBUS_LM_BULB_OFF;
-        uint8_t tailLeft = IBUS_LM_BULB_OFF;
-        uint8_t tailRight = IBUS_LM_BULB_OFF;
         if (homeLights == IBUS_LM_HOME_WELCOME) {
             highBeam = IBUS_LME38_HIGH_BEAM_L | IBUS_LME38_HIGH_BEAM_R;
             tailLeft = IBUS_LME38_TAIL_LAMP_L;
@@ -2926,13 +2958,20 @@ void IBusCommandLMActivateBulbs(
                 blinker = IBUS_LCM_BLINKER_OFF;
                 break;
         }
-        if (parkingLights == 0x01) {
+        uint8_t tailLeft = IBUS_LM_BULB_OFF;
+        uint8_t tailRight = IBUS_LM_BULB_OFF;
+        if (
+            parkingLights == IBUS_LM_PARK_LIGHTS_FRONT || 
+            parkingLights == IBUS_LM_PARK_LIGHTS_FRONT_AND_REAR
+        ) {
             parkingLightLeft = IBUS_LCM_SIDE_MARKER_LEFT;
             parkingLightRight = IBUS_LCM_SIDE_MARKER_RIGHT;
         }
+        if (parkingLights == IBUS_LM_PARK_LIGHTS_FRONT) {
+            tailLeft = IBUS_LCM_TAIL_LAMP_L;
+            tailRight = IBUS_LCM_TAIL_LAMP_R;
+        }
         uint8_t highBeam = IBUS_LM_BULB_OFF;
-        uint8_t tailLeft = IBUS_LM_BULB_OFF;
-        uint8_t tailRight = IBUS_LM_BULB_OFF;
         if (homeLights == IBUS_LM_HOME_WELCOME) {
             highBeam = IBUS_LCM_HIGH_BEAM_L | IBUS_LCM_HIGH_BEAM_R;
             tailLeft = IBUS_LCM_TAIL_LAMP_L;
@@ -2980,13 +3019,20 @@ void IBusCommandLMActivateBulbs(
                 blinker = IBUS_LCM_II_BLINKER_OFF;
                 break;
         }
-        if (parkingLights == 0x01) {
+        uint8_t tailLeft = IBUS_LM_BULB_OFF;
+        uint8_t tailRight = IBUS_LM_BULB_OFF;
+        if (
+            parkingLights == IBUS_LM_PARK_LIGHTS_FRONT || 
+            parkingLights == IBUS_LM_PARK_LIGHTS_FRONT_AND_REAR
+        ) {
             parkingLightLeft = IBUS_LCM_SIDE_MARKER_LEFT;
             parkingLightRight = IBUS_LCM_SIDE_MARKER_RIGHT;
         }
+        if (parkingLights == IBUS_LM_PARK_LIGHTS_FRONT_AND_REAR) {
+            tailLeft = IBUS_LCM_II_TAIL_LAMP_L;
+            tailRight = IBUS_LCM_II_TAIL_LAMP_R;
+        }
         uint8_t highBeam = IBUS_LM_BULB_OFF;
-        uint8_t tailLeft = IBUS_LM_BULB_OFF;
-        uint8_t tailRight = IBUS_LM_BULB_OFF;
         if (homeLights == IBUS_LM_HOME_WELCOME) {
             highBeam = IBUS_LCM_II_HIGH_BEAM_L | IBUS_LCM_II_HIGH_BEAM_R;
             tailLeft = IBUS_LCM_II_TAIL_LAMP_L;
@@ -3018,7 +3064,8 @@ void IBusCommandLMActivateBulbs(
         );
     } else if (
         ibus->lmVariant == IBUS_LM_LSZ ||
-        ibus->lmVariant == IBUS_LM_LSZ_2
+        ibus->lmVariant == IBUS_LM_LSZ_2 || 
+        ibus->lmVariant == IBUS_LM_LM2_83
     ) {
         switch (blinkerSide) {
           case IBUS_LM_BLINKER_LEFT:
@@ -3031,13 +3078,21 @@ void IBusCommandLMActivateBulbs(
                 blinker = IBUS_LSZ_BLINKER_OFF;
                 break;
         }
-        if (parkingLights == 0x01) {
+
+        uint8_t tailLeft = IBUS_LM_BULB_OFF;
+        uint8_t tailRight = IBUS_LM_BULB_OFF;
+        if (
+            parkingLights == IBUS_LM_PARK_LIGHTS_FRONT || 
+            parkingLights == IBUS_LM_PARK_LIGHTS_FRONT_AND_REAR
+        ) {
             parkingLightLeft = IBUS_LSZ_SIDE_MARKER_LEFT;
             parkingLightRight = IBUS_LSZ_SIDE_MARKER_RIGHT;
         }
+        if (parkingLights == IBUS_LM_PARK_LIGHTS_FRONT_AND_REAR) {
+            tailLeft = IBUS_LSZ_TAIL_LAMP_L;
+            tailRight = IBUS_LSZ_TAIL_LAMP_R;
+        }
         uint8_t highBeam = IBUS_LM_BULB_OFF;
-        uint8_t tailLeft = IBUS_LM_BULB_OFF;
-        uint8_t tailRight = IBUS_LM_BULB_OFF;
         if (homeLights == IBUS_LM_HOME_WELCOME) {
             highBeam = IBUS_LSZ_HIGH_BEAM_L | IBUS_LSZ_HIGH_BEAM_R;
             tailLeft = IBUS_LSZ_TAIL_LAMP_L;
@@ -3101,6 +3156,8 @@ void IBusCommandLMGetClusterIndicators(IBus_t *ibus)
  *     Description:
  *        Query the Light Module for the vehicle redundant data (VIN, Mileage)
  *        Raw: 80 03 D0 53 00
+ *        Note: For ZKEBC1/ZKEBC1RD, the response to this message will come from
+ *        the ZKE, but it *will* still respond if we address the light module
  *     Params:
  *         IBus_t *ibus - The pointer to the IBus_t object
  *     Returns:
@@ -3108,7 +3165,7 @@ void IBusCommandLMGetClusterIndicators(IBus_t *ibus)
  */
 void IBusCommandLMGetRedundantData(IBus_t *ibus)
 {
-    uint8_t msg[] = {IBUS_CMD_LCM_REQ_REDUNDANT_DATA};
+    uint8_t msg[] = {IBUS_CMD_REQ_REDUNDANT_DATA};
     IBusSendCommand(
         ibus,
         IBUS_DEVICE_IKE,

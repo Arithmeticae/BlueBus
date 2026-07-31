@@ -43,6 +43,8 @@
 #define HANDLER_GT_STATUS_CHECKED 1
 #define HANDLER_ZKE_UNLOCK_STATE_OFF 0
 #define HANDLER_ZKE_UNLOCK_STATE_UNLOCKING 1
+#define HANDLER_ZKE_LOCK_STATE_OFF 0
+#define HANDLER_ZKE_LOCK_STATE_LOCKING 1
 #define HANDLER_INT_BC127_STATE 1000
 #define HANDLER_INT_CDC_ANOUNCE 1000
 #define HANDLER_INT_CDC_STATUS 500
@@ -69,7 +71,8 @@
 #define HANDLER_LM_COMF_BLINK_LEFT 0x01
 #define HANDLER_LM_COMF_BLINK_RIGHT 0x02
 #define HANDLER_LM_COMF_PARKING_OFF 0x00
-#define HANDLER_LM_COMF_PARKING_ON 0x01
+#define HANDLER_LM_COMF_PARKING_FRONT 0x01
+#define HANDLER_LM_COMF_PARKING_FRONT_AND_REAR 0x02
 #define HANDLER_LM_HOME_LIGHT_INTERVALS 30
 #define HANDLER_LM_EVENT_REFRESH 0x00
 #define HANDLER_LM_EVENT_ALL_OFF 0x01
@@ -77,7 +80,8 @@
 #define HANDLER_LM_EVENT_BLINK_LEFT 0x03
 #define HANDLER_LM_EVENT_BLINK_RIGHT 0x04
 #define HANDLER_LM_EVENT_PARKING_OFF 0x05
-#define HANDLER_LM_EVENT_PARKING_ON 0x06
+#define HANDLER_LM_EVENT_PARKING_FRONT 0x06
+#define HANDLER_LM_EVENT_PARKING_FRONT_AND_REAR 0x10
 #define HANDLER_LM_EVENT_HOME_WELCOME 0x07
 #define HANDLER_LM_EVENT_HOME_FOLLOW 0x08
 #define HANDLER_LM_EVENT_HOME_OFF 0x09
@@ -86,6 +90,7 @@
 #define HANDLER_POWER_OFF 0
 #define HANDLER_POWER_ON 1
 #define HANDLER_POWER_TIMEOUT_MILLIS 61000
+#define HANDLER_KL99_RAD_TIMEOUT_MILLIS 60000
 #define HANDLER_TEL_MODE_AUDIO 0
 #define HANDLER_TEL_MODE_TCU 1
 #define HANDLER_TEL_STATUS_SET 0
@@ -110,6 +115,7 @@ typedef struct HandlerBodyModuleStatus_t {
     uint8_t lowSideDoors: 1;
     uint8_t doorsLocked: 1;
     uint8_t unlockState: 1;
+    uint8_t lockState: 1;
 } HandlerBodyModuleStatus_t;
 
 /**
@@ -126,7 +132,7 @@ typedef struct HandlerLightControlStatus_t {
     uint8_t blinkCount: 4;
     uint8_t blinkMode: 2;
     uint8_t blinkStatus: 2;
-    uint8_t parkingLampsMode: 1;
+    uint8_t parkingLampsMode: 2;
     uint8_t homeLightsMode: 2;
     uint8_t homeLightsArmed: 1;
     uint8_t homeLightsTicks;
@@ -171,6 +177,7 @@ typedef struct HandlerContext_t {
 } HandlerContext_t;
 
 uint8_t HandlerGetTelMode(HandlerContext_t *);
-uint8_t HandlerSetIBusTELStatus(HandlerContext_t *, unsigned char);
+uint8_t HandlerGetIBusTELStatus(HandlerContext_t *);
+uint8_t HandlerSetIBusTELStatus(HandlerContext_t *, uint8_t);
 void HandlerSetVolume(HandlerContext_t *, uint8_t);
 #endif /* HANDLER_CONTEXT_H */
